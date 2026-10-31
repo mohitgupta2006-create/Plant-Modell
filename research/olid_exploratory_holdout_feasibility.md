@@ -1,5 +1,10 @@
 # Conservative exploratory OLID holdout: feasibility assessment
 
+> Follow-up: all 59 crossing distance-8 candidates have now been screened. Fourteen direct candidates
+> were removed on content evidence and 45 remain unresolved. The exploratory holdout remains BLOCKED.
+> See [the bounded pair review](olid_distance8_crossing_review.md) and its per-pair evidence table.
+> The assessment below records the earlier, unadjudicated sensitivity analysis.
+
 ## Decision
 
 No defensible draft split manifest is issued under the declared conservative policy. A distance-6 mathematical

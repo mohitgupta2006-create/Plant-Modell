@@ -1,0 +1,168 @@
+{
+  "status": "BLOCKED",
+  "review_scope": "59 crossing distance-8 direct candidate links only; no biological independence established",
+  "reviewed_pairs": 59,
+  "distinct_reviewed_images": 81,
+  "exact_byte_duplicate_pairs": 0,
+  "exact_decoded_pixel_duplicate_pairs": 0,
+  "confirmed_clear_near_duplicate_pairs": 0,
+  "distinguishable_direct_candidates_removed": 14,
+  "inconclusive_links_retained": 45,
+  "original_graph_edges": 2949,
+  "reviewed_graph_edges": 2935,
+  "old_target_components": 72,
+  "new_target_components": 75,
+  "old_all_components": 212,
+  "new_all_components": 215,
+  "component_memberships_unchanged": false,
+  "removed_direct_edges_still_transitively_connected": 10,
+  "largest_target_component": {
+    "targets": 230,
+    "class_counts": {
+      "tomato__healthy": 177,
+      "tomato__N": 33,
+      "tomato__N_K": 20
+    }
+  },
+  "prior_proposal_reassessment": {
+    "meets_allocation_criteria": false,
+    "errors": [
+      "full-corpus component crosses partitions: IC_6a5dc21232a78d814be4",
+      "heldout component has multiple targets: IC_6a5dc21232a78d814be4",
+      "quarantine-connected heldout component: IC_6a5dc21232a78d814be4",
+      "full-corpus component crosses partitions: IC_450bc36aab650524188c",
+      "heldout component has multiple targets: IC_450bc36aab650524188c",
+      "heldout component has multiple targets: IC_da3522afbc860d75e038",
+      "full-corpus component crosses partitions: IC_f26f143a642b0753d9f7",
+      "heldout component has multiple targets: IC_f26f143a642b0753d9f7",
+      "insufficient train content components: tomato__N",
+      "insufficient val content components: tomato__healthy",
+      "insufficient val content components: tomato__N",
+      "insufficient test content components: tomato__healthy",
+      "insufficient test content components: tomato__N",
+      "insufficient test content components: tomato__N_K"
+    ],
+    "class_counts": {
+      "train": {
+        "tomato__healthy": 191,
+        "tomato__N": 22,
+        "tomato__N_K": 20
+      },
+      "val": {
+        "tomato__healthy": 15,
+        "tomato__N": 5,
+        "tomato__N_K": 5
+      },
+      "test": {
+        "tomato__healthy": 30,
+        "tomato__N": 15,
+        "tomato__N_K": 15
+      }
+    },
+    "content_component_counts": {
+      "train": {
+        "tomato__healthy": 33,
+        "tomato__N": 1,
+        "tomato__N_K": 4
+      },
+      "val": {
+        "tomato__healthy": 9,
+        "tomato__N": 3,
+        "tomato__N_K": 5
+      },
+      "test": {
+        "tomato__healthy": 14,
+        "tomato__N": 8,
+        "tomato__N_K": 13
+      }
+    },
+    "sizes": {
+      "train": 233,
+      "val": 25,
+      "test": 60
+    }
+  },
+  "remaining_direct_cross_partition_candidates": 45,
+  "conservative_search_trials": [
+    {
+      "minority_test_target": 6,
+      "meets_allocation_criteria": false,
+      "errors": [
+        "tomato__healthy: 44 eligible components, need 45 for test+val"
+      ]
+    },
+    {
+      "minority_test_target": 10,
+      "meets_allocation_criteria": false,
+      "errors": [
+        "tomato__healthy: 44 eligible components, need 45 for test+val"
+      ]
+    },
+    {
+      "minority_test_target": 12,
+      "meets_allocation_criteria": false,
+      "errors": [
+        "tomato__healthy: 44 eligible components, need 45 for test+val"
+      ]
+    },
+    {
+      "minority_test_target": 15,
+      "meets_allocation_criteria": false,
+      "errors": [
+        "tomato__healthy: 44 eligible components, need 45 for test+val"
+      ]
+    },
+    {
+      "minority_test_target": 20,
+      "meets_allocation_criteria": false,
+      "errors": [
+        "tomato__healthy: 44 eligible components, need 45 for test+val"
+      ]
+    }
+  ],
+  "accepted_allocations": 0,
+  "strict_plantwise_splitting": "BLOCKED: capture group and group evidence required; otherwise BLOCKED",
+  "inventory_counts": {
+    "active": 318,
+    "source_only": 470,
+    "quarantined": 10
+  },
+  "manifest_sha256": "c3b66a80536cae2a7176248b094e7d5a169882a14950e6b25330150778997d37",
+  "source_manifest_unchanged": true,
+  "ten_quarantined_records_unchanged": true,
+  "graph_fingerprints": {
+    "all_distance8_links.csv": "147463b578dc84b6a7dded5f1342166838e293fd0e615375c65e9d97004bdfb6",
+    "review_decisions.csv": "4a82a7aaa508c6c9ea15c5e3d0cc647090194cb65688ae7926ac06e01e0ae416",
+    "adjudicated_distance8_links.csv": "f067f4f439c527542182f5ca11a1fabb76b17e361c0a7398532b868385d145d8"
+  },
+  "nitrogen_capacity_bound": {
+    "total": 42,
+    "in_largest_component": 33,
+    "outside_largest_component": 9,
+    "outside_needed_if_largest_in_train": 20,
+    "outside_needed_if_largest_in_val": 30,
+    "outside_needed_if_largest_in_test": 20,
+    "needed_if_largest_excluded": 35,
+    "interpretation": "Necessary count bound for min train15/val5/test15 N; no partition search or random seed can overcome it."
+  },
+  "draft_split_manifest_emitted": false,
+  "rendered_image_cells_checked": 118,
+  "relevant_tests": {
+    "passed": 58,
+    "skipped": 1,
+    "skip_reason": "Windows symlink privilege unavailable",
+    "test_exploratory_holdout.py": {
+      "passed": 13
+    },
+    "test_olid_inventory.py": {
+      "passed": 11
+    },
+    "test_olid_root.py": {
+      "passed": 14,
+      "skipped": 1
+    },
+    "test_research_inputs.py": {
+      "passed": 20
+    }
+  }
+}
