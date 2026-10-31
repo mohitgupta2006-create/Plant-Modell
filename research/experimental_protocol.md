@@ -83,3 +83,11 @@ See [olid_similarity_cluster_review.md](olid_similarity_cluster_review.md). The 
 at component level, with 67 cross-label links screened side-by-side. Unresolved components remain atomic in the
 draft only. The 74-image component and source-only bridges prevent a finalized representative holdout; strict
 physical-group splitting is still blocked. No splitter or training was enabled.
+
+
+## Conservative allocation feasibility outcome
+
+See [olid_exploratory_holdout_feasibility.md](olid_exploratory_holdout_feasibility.md). A count-feasible
+distance-6 allocation was rejected by wider unresolved-link sensitivity and minority-support bounds. The offline
+research tool emitted no accepted draft manifest. Strict plant-wise splitting and training remain blocked;
+no production splitter or capture-group guard was modified.
