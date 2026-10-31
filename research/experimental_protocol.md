@@ -67,3 +67,11 @@ proof of the current machine. Record actual hardware before experiments. No chec
 Grad-CAM: predictor --cam-head health/cause/condition selects displayed target class; unsupported cause skipped.
 Masks/attention and CAM do not prove causal reasoning. SHAP/LIME for real environment remains BLOCKED; historical
 permutation scripts operate on simulated features and cannot support agronomic claims.
+
+
+## OLID capture-group evidence status
+
+See [olid_capture_group_evidence.md](olid_capture_group_evidence.md). Readable EXIF timestamps/GPS were found
+in 735/798 files, but no authoritative plant/leaf/session ledger was found in checked release materials. Strict
+splitting remains blocked. The exploratory similarity-cluster protocol is a proposal only, with explicit unknown
+biological dependence; no guard was relaxed and no split/training run was performed.
