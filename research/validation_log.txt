@@ -1,0 +1,107 @@
+
+######## test_research_inputs.py
+test_NK_label (__main__.Inputs.test_NK_label) ... ok
+test_affected_area (__main__.Inputs.test_affected_area) ... ok
+test_agreement (__main__.Inputs.test_agreement) ... ok
+test_background_intervention (__main__.Inputs.test_background_intervention) ... ok
+test_confusion_not_declared_solved (__main__.Inputs.test_confusion_not_declared_solved) ... ok
+test_duplicate_path (__main__.Inputs.test_duplicate_path) ... ok
+test_environment_exact_pairing (__main__.Inputs.test_environment_exact_pairing) ... ok
+test_escape_rejected (__main__.Inputs.test_escape_rejected) ... ok
+test_existing_mappings (__main__.Inputs.test_existing_mappings) ... ok
+test_explicit_olid_label (__main__.Inputs.test_explicit_olid_label) ... ok
+test_hash_mismatch (__main__.Inputs.test_hash_mismatch) ... ok
+test_healthy_none (__main__.Inputs.test_healthy_none) ... ok
+test_hierarchy (__main__.Inputs.test_hierarchy) ... ok
+test_inconsistent_label (__main__.Inputs.test_inconsistent_label) ... ok
+test_missing_environment (__main__.Inputs.test_missing_environment) ... ok
+test_missing_group (__main__.Inputs.test_missing_group) ... ok
+test_missing_review_rejected (__main__.Inputs.test_missing_review_rejected) ... ok
+test_split_group_leak (__main__.Inputs.test_split_group_leak) ... ok
+test_unknown_label_rejected (__main__.Inputs.test_unknown_label_rejected) ... ok
+test_unrepresented_branch_abstains (__main__.Inputs.test_unrepresented_branch_abstains) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.193s
+
+OK
+
+######## check_hashes.py
+SAME    models/env_stats.json
+SAME    models/label_maps.json
+
+26 files checked: 2 identical, 0 changed, 24 missing
+
+######## test_reconcile.py
+PASS metadata matches the production label map exactly  []
+PASS metadata: exactly one healthy class per crop except Orange
+PASS validate() reports an unknown class
+PASS validate() reports a missing class
+PASS aggregation raises on a class without metadata
+PASS each condition belongs to exactly one crop
+PASS crop marginals sum to 1
+PASS P(Tomato) = sum of tomato condition probabilities
+PASS P(healthy) uses only metadata-healthy classes
+PASS raw crop Tomato + condition Apple scab -> final crop Apple
+PASS raw crop kept for diagnostics and disagreement flagged
+PASS head disagreement makes the result uncertain
+PASS raw health Healthy + Tomato bacterial spot -> final Unhealthy
+PASS health disagreement flagged
+PASS healthy condition -> Healthy, cause None, severity None
+PASS confident consistent prediction is not uncertain
+PASS single trained cause class -> cause unavailable
+PASS missing cause metadata -> cause unavailable
+PASS two trained cause classes -> cause head used
+PASS crop marginal disagreement -> crop stays consistent but uncertain
+PASS low condition confidence reported
+PASS projection fixes violations and keeps consistent rows
+PASS projected severity class probabilities are valid
+PASS decoding after projection equals the original decode rule
+PASS no violations remain after projection  raw violations 243
+PASS raw severity kept and violation recorded
+PASS batch: one result per row
+PASS batch: zero user-facing crop/health/condition inconsistencies
+PASS batch: random raw heads do disagree (sanity of the test itself)  raw inconsistent 63/64
+PASS batch: final condition is the condition-head argmax
+PASS single-row call equals the same row in a batch
+PASS temperature > 1 lowers confidence without changing the answer
+
+32/32 reconcile checks passed
+
+######## test_saved_predictions.py
+
+===== image: 3464 test images (206 field)
+inconsistent crop/health/condition: before 21 (field 19), after 0
+PASS image: zero inconsistencies after reconciliation
+all   n=3464 | crop: raw 0.990 [0.986, 0.993] -> reconciled 0.989 [0.985, 0.992] | health: raw 0.995 [0.993, 0.997] -> reconciled 0.996 [0.993, 0.998] | condition (unchanged) 0.967 [0.960, 0.973]
+lab   n=3258 | crop: raw 1.000 [0.999, 1.000] -> reconciled 1.000 [0.999, 1.000] | health: raw 0.999 [0.997, 1.000] -> reconciled 0.999 [0.998, 1.000] | condition (unchanged) 0.989 [0.984, 0.994]
+field n= 206 | crop: raw 0.835 [0.782, 0.883] -> reconciled 0.816 [0.765, 0.865] | health: raw 0.942 [0.912, 0.971] -> reconciled 0.942 [0.908, 0.971] | condition (unchanged) 0.617 [0.553, 0.676]
+ordinal violations P(>Moderate) > P(>Mild): before 105, after 0
+PASS image: no ordinal violations after projection
+PASS image: projected decoding equals the saved pred_severity
+severity macro-F1 vs HEURISTIC labels (n=2664): true-health gating 0.825; predicted-health gating (user pathway) 0.825; hidden because predicted healthy: 4
+   lab: n=2583 true-gated 0.830, user-pathway 0.830
+   field: n=81 true-gated 0.685, user-pathway 0.663
+
+===== fusion: 3464 test images (206 field)
+inconsistent crop/health/condition: before 19 (field 18), after 0
+PASS fusion: zero inconsistencies after reconciliation
+PASS fusion: 'before' count matches the analysis report (19)  got 19
+all   n=3464 | crop: raw 0.990 [0.986, 0.993] -> reconciled 0.989 [0.985, 0.992] | health: raw 0.997 [0.994, 0.998] -> reconciled 0.995 [0.993, 0.998] | condition (unchanged) 0.969 [0.961, 0.975]
+lab   n=3258 | crop: raw 1.000 [0.999, 1.000] -> reconciled 1.000 [0.999, 1.000] | health: raw 0.999 [0.998, 1.000] -> reconciled 0.999 [0.998, 1.000] | condition (unchanged) 0.990 [0.986, 0.995]
+field n= 206 | crop: raw 0.835 [0.782, 0.884] -> reconciled 0.816 [0.762, 0.869] | health: raw 0.951 [0.922, 0.980] -> reconciled 0.937 [0.903, 0.971] | condition (unchanged) 0.631 [0.565, 0.692]
+ordinal violations P(>Moderate) > P(>Mild): before 115, after 0
+PASS fusion: no ordinal violations after projection
+PASS fusion: projected decoding equals the saved pred_severity
+severity macro-F1 vs HEURISTIC labels (n=2664): true-health gating 0.831; predicted-health gating (user pathway) 0.830; hidden because predicted healthy: 4
+   lab: n=2583 true-gated 0.834, user-pathway 0.834
+   field: n=81 true-gated 0.724, user-pathway 0.705
+
+7/7 saved-prediction checks passed
+
+######## summary
+test_research_inputs.py      PASSED
+check_hashes.py              FAILED (exit 1)
+test_reconcile.py            PASSED
+test_saved_predictions.py    PASSED
+test_venv_inference.py       SKIPPED (torch not available in this interpreter)

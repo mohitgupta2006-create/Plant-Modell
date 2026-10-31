@@ -1,3 +1,10 @@
+> **Reviewer revision branch (31 October 2026):** historical results below are preserved, not reproduced here.
+> Revised training is image-first, uses isolated reviewer checkpoint folders, blocks synthetic environmental
+> experiments and masks unsupported severity. OLID I needs a reviewed manifest. The legacy `--all` pipeline is blocked.
+> See [repository audit](research/repository_audit.md), [input contracts](research/dataset_audit.md),
+> [execution protocol](research/experimental_protocol.md), [actual tests](research/results_summary.md), and
+> [reviewer response status](research/reviewer_response.md). No claim that source confounding is solved.
+
 # Fruit Leaf Health AI
 
 > **Multi-Task Deep Learning Framework for Crop Identification, Disease Diagnosis, Heuristic Severity Grading, and Visual Interpretability Across Eight Fruit and Vegetable Crops.**
