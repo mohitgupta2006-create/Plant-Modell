@@ -107,3 +107,11 @@ authors or an appropriate expert to adjudicate all five conflicting-label pairs;
 Independent diagnostic verification has not been performed. Review near-duplicates and split design only after
 group metadata is available. Missing historical artifacts/ML dependencies still limit unrelated integration tests.
 No research-ready, model-performance or publication-readiness claim is made.
+
+
+## Follow-up: five-pair authoritative provenance review
+
+See [olid_conflict_review.md](olid_conflict_review.md). Both original ZIP checksums and all ten disputed
+archive members were verified. All conflicts already exist in the published archives; no manifest label mapping
+error or authoritative diagnostic resolution was found. All ten records remain quarantined. The reviewed external
+manifest preserves all original source labels and unknown capture groups.
