@@ -1,9 +1,22 @@
 # Dataset audit and reviewed inputs
 
-Current raw-data availability: BLOCKED. There is no data/raw or data/processed directory in this clone.
+Current OLID tomato inventory: both parts are available through an explicitly configured external root.
+798 real files match the supplied spreadsheet counts. Ten conflicting-label files are quarantined; 318 target
+candidates remain source-labelled and NOT training-ready. Strict model loading/splitting is BLOCKED by unknown
+physical capture groups. See olid_integration_validation.md for actual checks and limitations.
+There is still no repository-local data/raw or data/processed directory in this clone.
 Physical images, labels, capture records, leaf masks, licenses/access records must be supplied by the investigator.
 The planned 18,160/544 counts are not verified actual counts. logs/split_full.txt records historical mixed-source
-counts: PlantVillage train 15,574 / val 3,249 / test 3,258; PlantDoc 1,061 / 211 / 206. OLID I absent.
+counts: PlantVillage train 15,574 / val 3,249 / test 3,258; PlantDoc 1,061 / 211 / 206. OLID I was absent from those historical training logs.
+
+## OLID inventory and strict manifest
+
+The new external inventory records all classes, explicit unknown identities and quarantine status. Read it with
+olid_inventory.validate_inventory for inspection. This does not authorize training. research_inputs.olid_rows
+remains the strict model-data loader; split_data.py independently rejects unknown OLID capture groups.
+Use validate_olid.py to audit actual directories against the supplied workbook; it refuses to overwrite outputs.
+`label_verified` in this source inventory refers to folder-to-spreadsheet reconciliation ONLY; the separate
+diagnosis_verification field explicitly records lack of independent diagnostic verification.
 
 ## OLID manifest
 

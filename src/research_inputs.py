@@ -96,15 +96,38 @@ def index_image_path(path, source, repository_root):
     return str(checked)
 
 
+def validate_olid_capture_groups(rows):
+    """Strict split eligibility: unknown identities must not become fabricated groups."""
+    unknown = {'', 'unknown', 'none', 'n/a', 'na', 'null', 'nan'}
+    for r in rows:
+        if r.get('source') != 'OLID_I':
+            continue
+        if r.get('status', 'active') != 'active':
+            raise ValueError('quarantined/source-only OLID rows cannot enter a split')
+        group = str(r.get('group_id', '')).strip().lower()
+        evidence = str(r.get('group_evidence', '')).strip().lower()
+        if group.rsplit(':', 1)[-1] in unknown or evidence in unknown:
+            raise ValueError('capture group and group evidence required; otherwise BLOCKED')
+
+
 def olid_rows(manifest, root):
     selected = olid_data_root(root)
+    manifest_rows = read_csv(manifest)
+    if manifest_rows and 'status' in manifest_rows[0]:
+        from olid_inventory import validate_inventory
+        manifest_rows = validate_inventory(manifest, root)
     rows, seen = [], set()
-    for r in read_csv(manifest):
+    for r in manifest_rows:
         p = _olid_file(selected, r.get('path', ''))
         key = str(p).casefold()
         if key in seen:
             raise ValueError('duplicate manifest image')
         seen.add(key)
+        status = r.get('status', 'active')
+        if status not in {'active', 'quarantined', 'source_only', 'excluded_duplicate'}:
+            raise ValueError('unknown OLID manifest status')
+        if status != 'active':
+            continue  # never admit quarantined, duplicate or unsupported records into model data
         cond = r.get('condition')
         if cond not in OLID_CONDITIONS:
             raise ValueError(f'unverified OLID condition: {cond}')
@@ -114,8 +137,7 @@ def olid_rows(manifest, root):
             raise ValueError('manual label review and evidence required')
         # Physical identity must come from capture records, never filename guesses.
         gid = r.get('group_id', '').strip()
-        if not gid or r.get('group_evidence', '').strip() == '':
-            raise ValueError('capture group and group evidence required; otherwise BLOCKED')
+        validate_olid_capture_groups([r])
         digest = hashlib.sha256(p.read_bytes()).hexdigest()
         if r.get('sha256') != digest:
             raise ValueError('image SHA256 does not match manifest')

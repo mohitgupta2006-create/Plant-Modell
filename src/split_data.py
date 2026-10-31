@@ -65,6 +65,8 @@ def main():
     if (ROOT / a.out).exists():
         ap.error("existing split output preserved; choose a new --out")
     df = pd.read_csv(ROOT / a.index).reset_index(drop=True)
+    from research_inputs import validate_olid_capture_groups
+    validate_olid_capture_groups(df.to_dict('records'))
     n = len(df)
     paths = [ROOT / p for p in df["path"]]
     uf = UF(n)
