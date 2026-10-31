@@ -4,7 +4,8 @@ Usage:  python src/prepare_data.py --pilot 40      # small subset -> data/proces
         python src/prepare_data.py                 # full        -> data/processed/index.csv
 
 Conventions: condition = "<Crop>___<Condition>", healthy leaves use "<Crop>___healthy" (kept in the condition head).
-Disease/pest -> cause Biotic; healthy -> cause None. No abiotic data is available (user decision, option b).
+Disease/pest -> Biotic; reviewed nutrient deficiencies -> Abiotic; healthy -> None.
+OLID I is optional and requires a manually reviewed manifest; no folder labels are guessed.
 PlantVillage group_id = original leaf from leaf-map.json; PlantDoc group_id is left empty here
 (assigned later by perceptual-hash grouping in split_data.py).
 """
@@ -17,6 +18,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from PIL import Image
+from research_inputs import olid_rows, condition_cause
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import DATA_PROCESSED, DATA_RAW, ROOT, SEED, MAX_IMAGES_PER_CONDITION  # noqa: E402
@@ -79,7 +81,7 @@ def pv_leaf_key(fname: str) -> str:
     return stem.split("___", 1)[1].lower() if "___" in stem else stem.lower()
 
 
-def discover():
+def discover(olid_manifest=None):
     rows, dropped = [], Counter()
     lm = json.load(open(DATA_RAW / "plantvillage_dl" / "leaf_grouping" / "leaf-map.json", encoding="utf-8"))
     pv_root = DATA_RAW / "plantvillage"
@@ -119,13 +121,16 @@ def discover():
                     rows.append(dict(path=p, crop=crop, condition=f"{crop}___{cond}", source="PlantDoc",
                                      acquisition="field", group_id="", _note="phash_pending", _key=p.name,
                                      _folder=f"{split}/{cls}"))
+    if olid_manifest is not None:
+        rows.extend(olid_rows(olid_manifest, ROOT))
     return rows, dropped
 
 
 def label(row):
     healthy = row["condition"].endswith("___healthy")
     row["health"] = "Healthy" if healthy else "Unhealthy"
-    row["cause"] = "None" if healthy else "Biotic"
+    known = {f"{c}___{k}" for c, k in list(PV_MAP.values()) + list(PD_MAP.values())}
+    row["cause"] = condition_cause(row["condition"], known)
     return row
 
 
@@ -144,9 +149,14 @@ def valid(p: Path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pilot", type=int, default=0, help="max images per (condition, source) for a pilot subset")
+    ap.add_argument("--olid-manifest", type=Path, help="reviewed OLID CSV; see research/dataset_audit.md")
+    ap.add_argument("--out", type=Path, help="new index path; existing files are never overwritten")
     a = ap.parse_args()
+    out = a.out or DATA_PROCESSED / ("index_pilot.csv" if a.pilot else "index.csv")
+    if out.exists():
+        ap.error(f"output exists and is preserved: {out}; choose a new --out")
     rng = random.Random(SEED)
-    rows, dropped = discover()
+    rows, dropped = discover(a.olid_manifest)
     rows = [label(r) for r in rows]
     print(f"discovered images (mapped classes only): {len(rows)}")
     print("\nPROPOSED PLANTVILLAGE MAPPING"); [print(f"  {k:55s} -> {v[0]}___{v[1]}") for k, v in PV_MAP.items()]
@@ -156,7 +166,7 @@ def main():
         r["_note"] for r in rows if r["source"] == "PlantVillage")))
     print("\nTEN EXAMPLES of PlantVillage group-id extraction (filename -> key -> group_id):")
     pv = sorted((r for r in rows if r["source"] == "PlantVillage"), key=lambda r: str(r["path"]))
-    for r in random.Random(SEED).sample(pv, 10):
+    for r in random.Random(SEED).sample(pv, min(10, len(pv))):
         print(f"  {Path(r['path']).name!r} -> {r['_key']!r} -> {r['group_id']}  [{r['_note']}]")
 
     # sampling: pilot cap per (condition, source); full run caps per condition, keeping all field images first.
@@ -180,18 +190,19 @@ def main():
         else:
             drop_reasons[why] += 1
     print(f"\nsampled {len(chosen)}  valid {len(kept)}  dropped {len(chosen) - len(kept)} {dict(drop_reasons)}")
-    out = DATA_PROCESSED / ("index_pilot.csv" if a.pilot else "index.csv")
-    DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
+    out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["path", "crop", "condition", "health", "cause", "source", "acquisition", "group_id"])
+        w.writerow(["path", "crop", "condition", "health", "cause", "source", "acquisition", "group_id", "label_evidence", "group_evidence", "sha256"])
         for r in sorted(kept, key=lambda r: str(r["path"])):
             w.writerow([Path(r["path"]).relative_to(ROOT).as_posix(), r["crop"], r["condition"], r["health"],
-                        r["cause"], r["source"], r["acquisition"], r["group_id"]])
+                        r["cause"], r["source"], r["acquisition"], r["group_id"],
+                        r.get("label_evidence", ""), r.get("group_evidence", ""), r.get("sha256", "")])
     print("wrote", out)
     print("\nCrop x cause x acquisition:")
     print(dict(sorted(Counter((r["crop"], r["cause"], r["acquisition"]) for r in kept).items())))
-    print("\nCrops with no abiotic examples: ALL (no abiotic data obtained)")
+    print("\nCrops with no abiotic examples:", sorted({r["crop"] for r in kept} -
+          {r["crop"] for r in kept if r["cause"] == "Abiotic"}))
     log(f"prepare_data {'pilot' if a.pilot else 'full'}: discovered={len(rows)} sampled={len(chosen)} valid={len(kept)} dropped={dict(drop_reasons)} out={out.name}")
 
 

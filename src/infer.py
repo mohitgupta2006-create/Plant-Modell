@@ -52,12 +52,12 @@ class GradCAM:
         if o.requires_grad:
             o.register_hook(lambda g: setattr(self, "grads", g))
 
-    def __call__(self, image, env, head):
+    def __call__(self, image, env, head, target=None):
         with torch.enable_grad():
             self.model.zero_grad(set_to_none=True)
             out = self.model(image, env)
             logits = out[head]
-            idx = logits.argmax(1)
+            idx = logits.argmax(1) if target is None else torch.as_tensor(target, device=logits.device).reshape(-1)
             logits.gather(1, idx[:, None]).sum().backward()
             w = self.grads.mean((2, 3), keepdim=True)
             cam = F.relu((w * self.acts).sum(1))

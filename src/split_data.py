@@ -62,6 +62,8 @@ def main():
     ap.add_argument("--index", required=True)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    if (ROOT / a.out).exists():
+        ap.error("existing split output preserved; choose a new --out")
     df = pd.read_csv(ROOT / a.index).reset_index(drop=True)
     n = len(df)
     paths = [ROOT / p for p in df["path"]]
@@ -125,6 +127,12 @@ def main():
     low = ct[(ct.get("val", 0) == 0) | (ct.get("test", 0) == 0)]
     if len(low):
         print("\nWARNING conditions with no val or no test samples:", list(low.index))
+    from research_inputs import split_audit
+    audit_df = df.drop(columns=['group_id']).rename(columns={'final_group': 'group_id'}).copy()
+    audit_df['cause'] = audit_df['cause'].fillna('None')
+    _, missing = split_audit(audit_df.to_dict('records'))
+    if missing:
+        print('BLOCKED biotic/abiotic tomato field evaluation: missing split/cause cells', missing)
     out = ROOT / a.out
     df.drop(columns=["group_id"]).rename(columns={"final_group": "group_id"}).to_csv(out, index=False)
     print("wrote", out)

@@ -104,8 +104,13 @@ def reconcile(logits, maps, trained_causes=None, temperature=None, thresholds=No
     temperature = temperature or {}
     th = dict(DEFAULT_THRESHOLDS, **(thresholds or {}))
     crops, conds, health_names = list(maps["crop"]), list(maps["condition"]), list(maps["health"])
-    member, healthy = aggregation_matrices(conds, crops)
-    pc = softmax(logits["condition"], temperature.get("condition", 1.0))
+    meta = maps.get("condition_meta", CONDITION_META)
+    member, healthy = aggregation_matrices(conds, crops, meta)
+    condition_logits = logits["condition"]
+    if maps.get("decoder") == "cause_first":
+        from research_hierarchy import gated_logits
+        condition_logits = gated_logits(logits, maps)
+    pc = softmax(condition_logits, temperature.get("condition", 1.0))
     p_crop_marg = pc @ member
     p_healthy = pc[:, healthy].sum(1)
     raw = {h: softmax(logits[h], temperature.get(h, 1.0)) for h in ("crop", "health")}
@@ -118,7 +123,7 @@ def reconcile(logits, maps, trained_causes=None, temperature=None, thresholds=No
     for i in range(pc.shape[0]):
         ci = int(pc[i].argmax())
         cond = conds[ci]
-        crop, is_healthy = CONDITION_META[cond]
+        crop, is_healthy = meta[cond]
         health = "Healthy" if is_healthy else "Unhealthy"
         r = {"condition": cond, "condition_conf": float(pc[i, ci]),
              "crop": crop, "crop_conf": float(p_crop_marg[i, crops.index(crop)]),
@@ -145,6 +150,12 @@ def reconcile(logits, maps, trained_causes=None, temperature=None, thresholds=No
         else:
             k = int(raw["cause"][i].argmax())
             r["cause"], r["cause_conf"] = maps["cause"][k], float(raw["cause"][i, k])
+        if not is_healthy and has_cause and "condition_meta" in maps:
+            # Cause follows the selected validated condition, preserving diagnostic consistency.
+            expected = "Abiotic" if cond in {"Tomato___N_Deficiency", "Tomato___NK_Deficiency"} else "Biotic"
+            r["cause"] = expected
+            r["cause_conf"] = (float("nan") if maps.get("decoder") == "flat" else
+                               float(raw["cause"][i, maps["cause"].index(expected)]))
         # severity (shown only for unhealthy final health; raw values always kept)
         r["raw_p_gt_mild"], r["raw_p_gt_moderate"] = float(p1[i]), float(sigmoid(logits["severity"][i])[1])
         r["p_gt_moderate_projected"] = float(p2[i])
@@ -154,6 +165,8 @@ def reconcile(logits, maps, trained_causes=None, temperature=None, thresholds=No
         else:
             r["severity"] = SEVERITY[int(sev_cls[i])]
             r["severity_conf"] = float(sev_probs[i, int(sev_cls[i])])
+        if not is_healthy and maps.get("severity_trained") is False:
+            r["severity"], r["severity_conf"] = "unavailable", float("nan")
         # uncertainty
         reasons = []
         for h in ("condition", "crop", "health"):

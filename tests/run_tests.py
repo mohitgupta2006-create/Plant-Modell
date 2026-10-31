@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-scripts = ["check_hashes.py", "test_reconcile.py", "test_saved_predictions.py", "test_venv_inference.py"]
+scripts = ["test_research_inputs.py", "check_hashes.py", "test_reconcile.py", "test_saved_predictions.py", "test_venv_inference.py"]
 has_torch = importlib.util.find_spec("torch") is not None
 summary = []
 for s in scripts:

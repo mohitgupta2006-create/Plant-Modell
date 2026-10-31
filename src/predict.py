@@ -47,7 +47,7 @@ from PIL import Image, UnidentifiedImageError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config as C  # noqa: E402
-from class_meta import validate as validate_meta  # noqa: E402
+from class_meta import CONDITION_META, validate as validate_meta  # noqa: E402
 from dataset import load_rgb_256, make_transform  # noqa: E402
 from infer import GradCAM, get_device, load_variant, overlay  # noqa: E402
 from reconcile import CAUSE_UNAVAILABLE, CAUSE_UNAVAILABLE_MSG, UNCERTAIN_MSG, reconcile  # noqa: E402
@@ -137,6 +137,8 @@ def build_parser():
                         help=f"{k}: EXPERIMENTAL, only with a fusion/env variant (simulated during training)")
     ap.add_argument("--variant", default="image", choices=VARIANTS,
                     help="model to use (default: image). fusion / fusion_shuffled_env / env are experimental")
+    ap.add_argument("--cam-head", choices=["health", "cause", "condition"], default="condition")
+    ap.add_argument("--run", help="checkpoint folder under models (e.g. image_reviewer_seed42)")
     ap.add_argument("--no-cam", action="store_true", help="skip Grad-CAM overlays")
     ap.add_argument("--max_images", type=int, default=MAX_IMAGES)
     ap.add_argument("--out_dir", default=None, help="folder for results (default: outputs/predictions/<timestamp>)")
@@ -150,13 +152,15 @@ def main(argv=None):
         fail(f"--{', --'.join(env_given)} only apply to the experimental fusion variants (the default image-only model "
              f"does not use environment values). Remove them, or add --variant fusion.")
 
-    stats = json.load(open(C.MODELS / "env_stats.json"))
     dev = get_device()
     try:
-        model, maps, cfg = load_variant(args.variant, "best", dev)
+        model, maps, cfg = load_variant(args.variant, "best", dev, run=args.run)
     except (FileNotFoundError, ValueError, RuntimeError) as e:
         fail(str(e))
-    problems = validate_meta(maps["condition"], maps["crop"])
+    stats = maps.get("research_env_stats")
+    if stats is None:
+        stats = json.load(open(C.MODELS / "env_stats.json"))
+    problems = validate_meta(maps["condition"], maps["crop"], maps.get("condition_meta", CONDITION_META))
     if problems:
         fail("class metadata does not match the checkpoint: " + " | ".join(problems))
     if stats["features"] != maps["env_features"]:
@@ -168,14 +172,19 @@ def main(argv=None):
             trained_causes = json.load(open(C.MODELS / "label_maps.json")).get("cause_trained_classes", ["Biotic"])
         except (OSError, ValueError):
             trained_causes = ["Biotic"]
-    cal = load_calibration(args.variant)
+    cal = None if cfg.get("research_protocol") else load_calibration(args.variant)
     temperature = cal.get("temperature") if cal else None
     thresholds = cal.get("thresholds") if cal else None
     conf_kind = "calibrated (validation temperature scaling)" if cal else "raw softmax (uncalibrated)"
 
     uses_env = args.variant in ENV_VARIANTS
     if uses_env:
-        print(EXPERIMENTAL_MSG.format(v=args.variant))
+        if cfg.get("research_protocol"):
+            if any(getattr(args, k) is None for k in ENV_ARGS):
+                fail("reviewer multimodal inference requires all four real environmental values")
+            print("Real-input research model: measurements must match this image capture and training units.")
+        else:
+            print(EXPERIMENTAL_MSG.format(v=args.variant))
         env, env_src = env_values(args, stats)
         env_norm = (np.array([env[k] for k in ENV_ARGS]) - np.array(stats["mean"])) / np.array(stats["std"])
     else:  # the image-only network has no environment branch; a placeholder tensor is passed and ignored
@@ -216,18 +225,24 @@ def main(argv=None):
         with torch.no_grad(), torch.autocast(dev.type, dtype=torch.float16, enabled=dev.type == "cuda"):
             out = model(x, envt.expand(len(batch), -1))
         logits = {k: v.float().cpu().numpy() for k, v in out.items()}
-        results += reconcile(logits, maps, trained_causes, temperature, thresholds)
+        try:
+            results += reconcile(logits, maps, trained_causes, temperature, thresholds)
+        except ValueError as exc:
+            fail(str(exc))
 
     cams = {}
     if not args.no_cam and model.use_img:
         gc = GradCAM(model)
-        for p, img in zip(valid_paths, valid_imgs):
+        for p, img, result in zip(valid_paths, valid_imgs, results):
             x = tf(img).unsqueeze(0).to(dev)
-            cam, _ = gc(x, envt.unsqueeze(0), "condition")
+            target = result[args.cam_head]
+            if target not in maps[args.cam_head]:
+                continue  # unsupported/healthy cause is not a valid explanation target
+            cam, _ = gc(x, envt.unsqueeze(0), args.cam_head, [maps[args.cam_head].index(target)])
             c224 = cv2.resize(cam[0].float().cpu().numpy(), (224, 224), interpolation=cv2.INTER_CUBIC).clip(0, 1)
             base = np.asarray(img.resize((224, 224)))
             panel = np.hstack([base, overlay(base, c224)])
-            cp = run_dir / f"cam_{safe(p.stem)}_{hashlib.md5(str(p).encode('utf-8')).hexdigest()[:6]}.png"
+            cp = run_dir / f"cam_{args.cam_head}_{safe(p.stem)}_{hashlib.md5(str(p).encode('utf-8')).hexdigest()[:6]}.png"
             ok, buf = cv2.imencode(".png", panel[:, :, ::-1])
             cp.write_bytes(buf.tobytes())
             cams[str(p)] = str(cp)
@@ -249,7 +264,9 @@ def main(argv=None):
         else:
             print("  Cause:      None (healthy)")
         print(f"  Condition:  {r['condition']} (confidence {r['condition_conf']:.2f})")
-        if r["health"] == "Unhealthy":
+        if r["severity"] == "unavailable":
+            print("  Severity:   unavailable (no validated severity ground truth)")
+        elif r["health"] == "Unhealthy":
             print(f"  Severity:   {r['severity']} (confidence {r['severity_conf']:.2f}) [heuristic damage estimate]")
         else:
             print("  Severity:   None (healthy)")

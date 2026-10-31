@@ -6,10 +6,11 @@
 
 Outputs in models/<variant>/: last.pt (resumable), best.pt (lowest val loss), history.csv, config.json, DONE.json.
 Learning curves: outputs/figures/curves_<variant>.png.
-Validation uses real environment values for every variant; for fusion_shuffled_env only the TRAINING environment
+Legacy validation used simulated environment values; revised training requires real pairing for env variants; for fusion_shuffled_env only the TRAINING environment
 rows are permuted across training samples (seed 42), which is the control for 'does the env branch help'.
 """
 import argparse
+import hashlib
 import json
 import random
 import sys
@@ -59,7 +60,7 @@ def cond_weights(df_train, maps):
 
 
 @torch.no_grad()
-def evaluate(model, loader, dev, cw, amp):
+def evaluate(model, loader, dev, cw, amp, flat=False):
     model.eval()
     tot, n_b = 0.0, 0
     hit = {k: [0, 0] for k in ("crop", "health", "cause", "condition")}
@@ -68,7 +69,9 @@ def evaluate(model, loader, dev, cw, amp):
         with torch.autocast(dev.type, dtype=torch.float16, enabled=amp):
             out = model(b["image"], b["env"])
         out = {k: v.float() for k, v in out.items()}
-        loss, _, _ = total_loss(out, b, cw.to(dev) if cw is not None else None, C.LABEL_SMOOTHING)
+        loss, parts, _ = total_loss(out, b, cw.to(dev) if cw is not None else None, C.LABEL_SMOOTHING)
+        if flat:
+            loss = parts["condition"]
         tot += loss.item()
         n_b += 1
         for k in hit:
@@ -81,6 +84,8 @@ def evaluate(model, loader, dev, cw, amp):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--flat", action="store_true", help="condition-only loss/decoding baseline")
+    ap.add_argument("--lab-only", action="store_true", help="train/validate only on laboratory acquisition")
     ap.add_argument("--variant", choices=VARIANTS, help="train one variant (required unless --all)")
     ap.add_argument("--all", action="store_true",
                     help="reproducible pipeline: resume/skip finished preparation stages, train all 4 variants, evaluate")
@@ -94,26 +99,42 @@ def main():
     ap.add_argument("--workers", type=int, default=C.NUM_WORKERS)
     ap.add_argument("--max_steps", type=int, default=0, help="timing test: stop after N train steps, save nothing")
     a = ap.parse_args()
+    if a.epochs < 1 or a.batch < 1 or a.workers < 0:
+        ap.error("positive epochs/batch and nonnegative workers required")
     if a.all:
         from pipeline import run_pipeline
         run_pipeline(skip_eval=a.skip_eval, smoke=a.smoke)
         return
     if a.variant is None:
         ap.error("--variant is required unless --all is given")
+    if a.max_steps and a.max_steps <= 10:
+        ap.error("--max_steps must be greater than 10 (10 warm-up steps)")
+    if a.lab_only and a.variant != "image":
+        ap.error("--lab-only currently supports image-only to keep normalization domain independent")
     timing = a.max_steps > 0
     v = a.variant
-    run = v if a.seed == C.SEED else f"{v}_seed{a.seed}"
+    run = f"{v}_reviewer{'_flat' if a.flat else ''}{'_lab' if a.lab_only else ''}_seed{a.seed}"  # isolate legacy checkpoints/results
     out_dir = C.MODELS / run
     out_dir.mkdir(parents=True, exist_ok=True)
     if (out_dir / "DONE.json").exists() and not timing:
-        print(f"{run}: DONE.json exists -> training already complete; nothing to do")
-        return
+        sys.exit(f"Completed run preserved: {run}; choose an unused seed/run configuration")
     seed_all(a.seed)
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     amp = dev.type == "cuda" and C.MIXED_PRECISION
-    df, maps = build_table()
-    save_label_maps(maps)
-    stats = json.load(open(C.MODELS / "env_stats.json"))
+    df, maps = build_table(research=True, variant=v)
+    maps["decoder"] = "flat" if a.flat else "cause_first"
+    if a.lab_only:
+        df = df[(df["split"] == "test") | (df["acquisition"] == "lab")].copy()
+        trained = sorted(df.loc[df["split"] == "train", "condition"].unique())
+        df = df[df["condition"].isin(trained)].copy()
+        maps["condition"] = trained
+        maps["condition_meta"] = {k: maps["condition_meta"][k] for k in trained}
+        causes = sorted(df.loc[(df["split"] == "train") & (df["health"] == "Unhealthy"), "cause"].unique())
+        maps["cause_trained_classes"] = causes
+        df["cause_valid"] = df["health"].eq("Unhealthy") & (set(causes) == {"Biotic", "Abiotic"})
+        if not (df["split"] == "train").any() or not (df["split"] == "val").any():
+            ap.error("lab-only requires train and validation groups")
+    stats = maps["research_env_stats"]
     tr_df = df[df["split"] == "train"].reset_index(drop=True)
     va_df = df[df["split"] == "val"].reset_index(drop=True)
     use_img = v != "env"
@@ -127,16 +148,20 @@ def main():
     va_ds = LeafDataset(va_df, maps, stats, train=False, load_image=use_img)
     kw = dict(num_workers=a.workers, pin_memory=dev.type == "cuda", persistent_workers=a.workers > 0)
     g = torch.Generator()
-    tr_dl = DataLoader(tr_ds, batch_size=a.batch, shuffle=True, drop_last=True, generator=g, **kw)
+    tr_dl = DataLoader(tr_ds, batch_size=a.batch, shuffle=True, drop_last=False, generator=g, **kw)
     va_dl = DataLoader(va_ds, batch_size=max(a.batch, 32), shuffle=False, **kw)
     cw, ratio = cond_weights(tr_df, maps)
-    cfg = {"variant": v, "epochs": a.epochs, "batch": a.batch, "workers": a.workers, "img_size": C.IMG_SIZE, "amp": amp,
+    fingerprint = (C.DATA_PROCESSED / "splits.csv").read_bytes()
+    if v != "image":
+        fingerprint += (C.DATA_PROCESSED / "env_real.csv").read_bytes()
+    dataset_hash = hashlib.sha256(fingerprint).hexdigest()
+    cfg = {"dataset_sha256": dataset_hash,"variant": v, "epochs": a.epochs, "batch": a.batch, "workers": a.workers, "img_size": C.IMG_SIZE, "amp": amp,
            "device": str(dev), "lr_head": C.LR_HEAD, "lr_backbone": C.LR_BACKBONE, "wd": C.WEIGHT_DECAY,
            "label_smoothing": C.LABEL_SMOOTHING, "grad_clip": C.GRAD_CLIP, "patience": C.EARLY_STOP_PATIENCE,
            "seed": a.seed, "run": run, "split_seed": C.SEED, "n_train": len(tr_df), "n_val": len(va_df), "condition_class_weights": cw is not None,
-           "max_condition_imbalance_ratio": round(ratio, 2), "n_conditions": len(maps["condition"])}
-    if not timing:
-        json.dump(cfg, open(out_dir / "config.json", "w"), indent=2)
+           "max_condition_imbalance_ratio": round(ratio, 2), "n_conditions": len(maps["condition"]), "research_protocol": "reviewer_revision_v1",
+           "severity_trained": False, "loss_weights": {"crop": 1, "health": 1, "cause": 1, "condition": 1, "severity": 0},
+           "environment_method": stats["method"], "flat": a.flat, "lab_only": a.lab_only}
 
     model = FruitHealthNet(v, len(maps["condition"]), pretrained=True).to(dev)
     opt = torch.optim.AdamW(model.param_groups(C.LR_HEAD, C.LR_BACKBONE, C.WEIGHT_DECAY))
@@ -146,7 +171,8 @@ def main():
     last = out_dir / "last.pt"
     if last.exists() and not timing:
         ck = torch.load(last, map_location="cpu", weights_only=False)
-        if ck["config"]["variant"] != v or ck["label_maps"]["condition"] != maps["condition"]:
+        if (ck["config"]["variant"] != v or ck["label_maps"]["condition"] != maps["condition"]
+                or ck["config"].get("dataset_sha256") != dataset_hash):
             sys.exit("ABORT: last.pt does not match this variant / label maps; not resuming (file preserved)")
         model.load_state_dict(ck["model"])
         opt.load_state_dict(ck["opt"])
@@ -156,6 +182,10 @@ def main():
         set_rng_state(ck["rng"])
         log(f"train {run}: RESUMED from epoch {start} (best val {best:.4f}, patience counter {bad})")
         print(f"resumed from epoch {start}")
+    if a.flat:
+        cfg["loss_weights"] = {k: int(k == "condition") for k in cfg["loss_weights"]}
+    if not timing:
+        json.dump(cfg, open(out_dir / "config.json", "w"), indent=2)
     log(f"train {run}: start cfg={json.dumps(cfg)} class_weights_ratio={ratio:.2f}")
 
     for ep in range(start, a.epochs):
@@ -168,8 +198,10 @@ def main():
             try:
                 with torch.autocast(dev.type, dtype=torch.float16, enabled=amp):
                     out = model(b["image"], b["env"])
-                loss, _, _ = total_loss({k: x.float() for k, x in out.items()}, b,
+                loss, parts, _ = total_loss({k: x.float() for k, x in out.items()}, b,
                                         cw.to(dev) if cw is not None else None, C.LABEL_SMOOTHING)
+                if a.flat:
+                    loss = parts["condition"]
                 opt.zero_grad(set_to_none=True)
                 scaler.scale(loss).backward()
                 scaler.unscale_(opt)
@@ -196,7 +228,7 @@ def main():
                 print(f"  ep{ep} step {i}/{len(tr_dl)} loss {run_loss / nb:.4f}", flush=True)
         lr = opt.param_groups[0]["lr"]
         sched.step()
-        vl, acc, ns = evaluate(model, va_dl, dev, cw, amp)
+        vl, acc, ns = evaluate(model, va_dl, dev, cw, amp, flat=a.flat)
         dur = time.time() - t0
         row = {"epoch": ep, "train_loss": run_loss / nb, "val_loss": vl, "val_health_acc": acc["health"],
                "val_cause_acc": acc["cause"], "val_condition_acc": acc["condition"], "val_crop_acc": acc["crop"],

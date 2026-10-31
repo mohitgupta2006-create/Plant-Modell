@@ -45,6 +45,11 @@ def newest(paths):
 
 
 def run_pipeline(skip_eval=False, smoke=False):
+    sys.exit("BLOCKED: legacy --all creates synthetic environment and heuristic severity labels. "
+             "Use reviewed inputs and src/train.py --variant image; see research/experimental_protocol.md.")
+
+
+def legacy_pipeline_reference(skip_eval=False, smoke=False):
     pv, pd_, lm = C.DATA_RAW / "plantvillage", C.DATA_RAW / "plantdoc" / "_manifest.csv", \
         C.DATA_RAW / "plantvillage_dl" / "leaf_grouping" / "leaf-map.json"
     if not (pv.is_dir() and pd_.exists() and lm.exists()):

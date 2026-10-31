@@ -31,7 +31,9 @@ def load_rgb_256(path) -> Image.Image:
         return im.convert("RGB").resize((CACHE_SIZE, CACHE_SIZE), Image.BICUBIC)
 
 
-def build_table():
+def build_table(research=False, variant="image"):
+    if research:
+        return build_research_table(variant)
     sp = pd.read_csv(DATA_PROCESSED / "splits.csv")
     env = pd.read_csv(DATA_PROCESSED / "env.csv")
     sev = pd.read_csv(DATA_PROCESSED / "severity.csv")[["path", "severity", "severity_valid"]]
@@ -44,6 +46,42 @@ def build_table():
             # cause classes that have >= 1 training example (Abiotic has none: no abiotic data were obtained)
             "cause_trained_classes": trained_causes}
     return df, maps
+
+
+def build_research_table(variant="image"):
+    from research_inputs import FEATURES, paired_environment, split_audit
+    from class_meta import CONDITION_META
+    sp = pd.read_csv(DATA_PROCESSED / "splits.csv", keep_default_na=False)
+    split_audit(sp.to_dict("records"))
+    conditions = sorted(sp.loc[sp["split"] == "train", "condition"].unique())
+    if set(sp["condition"]) - set(conditions):
+        raise ValueError("validation/test condition absent from training")
+    unknown = set(conditions) - set(CONDITION_META) - {"Tomato___N_Deficiency", "Tomato___NK_Deficiency"}
+    if unknown:
+        raise ValueError(f"unknown condition metadata: {unknown}")
+    if variant != "image":
+        env = pd.read_csv(DATA_PROCESSED / "env_real.csv", keep_default_na=False)
+        matched = paired_environment(sp.to_dict("records"), env.to_dict("records"))
+        sp = sp.merge(pd.DataFrame(matched)[["path"] + FEATURES], on="path", validate="1:1")
+        tr = sp.loc[sp["split"] == "train", FEATURES].astype(float)
+        stats = {"mean": tr.mean().tolist(), "std": tr.std(ddof=0).replace(0, 1).tolist(),
+                 "features": FEATURES, "method": "real exact image/location/date pairing; train-only fit"}
+    else:
+        for k in FEATURES:
+            sp[k] = 0.0  # unused placeholders, never measurements
+        stats = {"mean": [0.] * 4, "std": [1.] * 4, "features": FEATURES, "method": "not_used"}
+    sp["severity"], sp["severity_valid"] = "", False
+    causes = sorted(sp.loc[(sp["split"] == "train") & (sp["health"] == "Unhealthy"), "cause"].unique())
+    # A one-class cause target is not a disease-versus-deficiency experiment.
+    sp["cause_valid"] = sp["health"].eq("Unhealthy") & (set(causes) == {"Biotic", "Abiotic"})
+    meta = {c: list(CONDITION_META[c]) if c in CONDITION_META else ["Tomato", False] for c in conditions}
+    maps = {"crop": CROPS, "health": HEALTH, "cause": CAUSE, "severity": SEVERITY,
+            "condition": conditions, "condition_meta": meta, "env_features": FEATURES,
+            "cause_trained_classes": causes, "severity_trained": False,
+            "research_env_stats": stats, "research_protocol": "reviewer_revision_v1", "decoder": "cause_first"}
+    if not (sp["split"] == "train").any() or not (sp["split"] == "val").any():
+        raise ValueError("training and validation samples required")
+    return sp, maps
 
 
 def save_label_maps(maps):
@@ -71,10 +109,11 @@ class LeafDataset(Dataset):
         self.env = env if env_override is None else env_override.astype(np.float32)
         d = self.df
         unh = (d["health"] == "Unhealthy").values
+        cause_ok = unh & d.get("cause_valid", pd.Series(True, index=d.index)).astype(bool).values
         self.y = {
             "crop": d["crop"].map({k: i for i, k in enumerate(CROPS)}).values,
             "health": d["health"].map({"Healthy": 0, "Unhealthy": 1}).values,
-            "cause": np.where(unh, d["cause"].map({"Biotic": 0, "Abiotic": 1}).fillna(IGNORE), IGNORE).astype(int),
+            "cause": np.where(cause_ok, d["cause"].map({"Biotic": 0, "Abiotic": 1}).fillna(IGNORE), IGNORE).astype(int),
             "condition": d["condition"].map(ci).values,
             "severity": np.where(unh & (d["severity_valid"].fillna(False).astype(bool)),
                                  d["severity"].map({"Mild": 0, "Moderate": 1, "Severe": 2}).fillna(IGNORE), IGNORE).astype(int),
