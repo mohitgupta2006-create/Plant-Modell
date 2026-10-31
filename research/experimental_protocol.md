@@ -75,3 +75,11 @@ See [olid_capture_group_evidence.md](olid_capture_group_evidence.md). Readable E
 in 735/798 files, but no authoritative plant/leaf/session ledger was found in checked release materials. Strict
 splitting remains blocked. The exploratory similarity-cluster protocol is a proposal only, with explicit unknown
 biological dependence; no guard was relaxed and no split/training run was performed.
+
+
+## Reviewed OLID similarity graph — draft only
+
+See [olid_similarity_cluster_review.md](olid_similarity_cluster_review.md). The 318-target graph was screened
+at component level, with 67 cross-label links screened side-by-side. Unresolved components remain atomic in the
+draft only. The 74-image component and source-only bridges prevent a finalized representative holdout; strict
+physical-group splitting is still blocked. No splitter or training was enabled.
