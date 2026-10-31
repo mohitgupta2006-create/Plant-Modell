@@ -18,7 +18,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from PIL import Image
-from research_inputs import olid_rows, condition_cause
+from research_inputs import olid_rows, condition_cause, index_image_path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import DATA_PROCESSED, DATA_RAW, ROOT, SEED, MAX_IMAGES_PER_CONDITION  # noqa: E402
@@ -195,7 +195,7 @@ def main():
         w = csv.writer(f)
         w.writerow(["path", "crop", "condition", "health", "cause", "source", "acquisition", "group_id", "label_evidence", "group_evidence", "sha256"])
         for r in sorted(kept, key=lambda r: str(r["path"])):
-            w.writerow([Path(r["path"]).relative_to(ROOT).as_posix(), r["crop"], r["condition"], r["health"],
+            w.writerow([index_image_path(r["path"], r["source"], ROOT), r["crop"], r["condition"], r["health"],
                         r["cause"], r["source"], r["acquisition"], r["group_id"],
                         r.get("label_evidence", ""), r.get("group_evidence", ""), r.get("sha256", "")])
     print("wrote", out)

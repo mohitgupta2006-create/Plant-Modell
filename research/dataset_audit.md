@@ -8,7 +8,26 @@ counts: PlantVillage train 15,574 / val 3,249 / test 3,258; PlantDoc 1,061 / 211
 ## OLID manifest
 
 CSV columns: path,condition,source,acquisition,label_verified,label_evidence,group_id,group_evidence,sha256.
-Path must identify an existing image INSIDE the repository (normally ignored data/raw/olid_i/).
+By default, path identifies an existing image relative to the repository (normally ignored data/raw/olid_i/).
+For an external dataset, explicitly set OLID_DATA_ROOT to an existing absolute dataset directory in the shell
+running preparation. Do not commit a local path or credentials. Example using a user-supplied variable:
+
+```powershell
+$env:OLID_DATA_ROOT = $YourAbsoluteDatasetDirectory
+python src/prepare_data.py --olid-manifest $YourReviewedManifestPath --out data/processed/index_reviewer.csv
+```
+
+With this setting, each manifest `path` is relative to OLID_DATA_ROOT, e.g. `tomato__N/<original filename>.JPG`.
+The manifest location does not change the image root. Unset the environment variable to restore legacy
+repository-relative behavior. Empty/relative/missing/file/filesystem-root configurations are rejected.
+Manifest absolute paths, drive-relative paths, parent traversal, alternate data streams and resolved symlink/junction
+escapes are rejected. Access remains confined to the explicitly selected root; do not configure a broad shared directory.
+No dataset is copied. Preparation exports native absolute OLID image paths into the ignored local index when images
+are external, so existing pathlib image readers can open them. These generated indices are machine-local: recreate
+them when moving the dataset. This change does not add external-path support to independent annotation/source-control
+tools that impose their own repository-only contracts. Other datasets and labels are unchanged.
+Reviewed label evidence, capture-group evidence and SHA256 are still mandatory; the setting is not an ingestion bypass.
+PlantVillage/PlantDoc are still required by the combined preparation command. No real ingestion is claimed without them.
 source=OLID_I; acquisition=field; label_verified=true only after investigator inspection.
 Use canonical conditions Tomato___N_Deficiency, Tomato___NK_Deficiency, Tomato___healthy ONLY where
 dataset documentation/manual review actually supports them. These identifiers come from the master prompt;

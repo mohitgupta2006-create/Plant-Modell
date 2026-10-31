@@ -1,13 +1,15 @@
 """Fail-closed research input contracts. No dataset labels or measurements are inferred.
 
-CSV paths are relative to the repository; annotation/matching evidence must be supplied
+CSV paths are relative to the repository by default; OLID_DATA_ROOT can explicitly
+select a separate OLID image directory. Manifest entries remain relative to that root; annotation/matching evidence must be supplied
 by the investigator. A declaration is auditable metadata, not independent verification.
 """
 import csv
 import hashlib
 import math
+import os
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 DEFICIENCIES = {'Tomato___N_Deficiency', 'Tomato___NK_Deficiency'}
 OLID_CONDITIONS = DEFICIENCIES | {'Tomato___healthy'}
@@ -26,10 +28,79 @@ def local_file(root, relative):
         raise ValueError(f'missing input file: {relative}')
     return p
 
+def olid_data_root(repository_root):
+    """Explicit, process-local opt-in for OLID only; never infer an external directory.
+
+    Read at call time so importing this module does not access the external dataset.
+    A configured value must be an existing absolute directory, not a drive/share root.
+    Unset preserves repository-relative manifest behavior; blank is a configuration error.
+    """
+    value = os.environ.get('OLID_DATA_ROOT')
+    if value is None:
+        return Path(repository_root).resolve(strict=True)
+    if not value or not value.strip():
+        raise ValueError('OLID_DATA_ROOT must not be empty')
+    selected = Path(value)
+    if not selected.is_absolute():
+        raise ValueError('OLID_DATA_ROOT must be an absolute dataset directory')
+    if value.startswith(('\\\\?\\', '\\\\.\\')):
+        raise ValueError('OLID_DATA_ROOT must not use Windows device paths')
+    try:
+        selected = selected.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError('OLID_DATA_ROOT directory does not exist or cannot be resolved') from exc
+    if not selected.is_dir() or selected.parent == selected:
+        raise ValueError('OLID_DATA_ROOT must be a dataset directory, not a file or filesystem root')
+    return selected
+
+
+def olid_image_file(repository_root, relative):
+    """Resolve a manifest-relative file only inside the explicitly selected OLID root.
+
+    Check lexical paths before filesystem access and resolved paths before opening files.
+    Symlinks/junctions escaping the selected root remain forbidden. Keep manifest paths
+    relative even when the dataset root is absolute. Do not expand user/env placeholders.
+    """
+    selected = olid_data_root(repository_root)
+    return _olid_file(selected, relative)
+
+
+def _olid_file(selected, relative):
+    if not isinstance(relative, str):
+        raise ValueError('OLID image path must be a relative string')
+    win = PureWindowsPath(relative)
+    if (not relative or not relative.strip() or Path(relative).is_absolute()
+            or win.drive or win.root or '..' in win.parts or '..' in Path(relative).parts
+            or ':' in relative or '\x00' in relative):
+        raise ValueError('OLID image path must be relative and stay inside its configured dataset root')
+    # local_file resolves symlinks/junctions before checking containment and existence.
+    return local_file(selected, relative)
+
+
+def index_image_path(path, source, repository_root):
+    """Keep legacy relative indices; permit an OLID absolute path only under its opted-in root.
+
+    Existing ROOT / path consumers support native absolute paths. No dataset is copied.
+    Generated indices are local artifacts; recreate them when moving the external dataset.
+    """
+    p = Path(path).resolve(strict=True)
+    root = Path(repository_root).resolve(strict=True)
+    if p.is_relative_to(root):
+        return p.relative_to(root).as_posix()
+    if source != 'OLID_I' or 'OLID_DATA_ROOT' not in os.environ:
+        raise ValueError('external image requires explicit OLID_DATA_ROOT and OLID_I source')
+    selected = olid_data_root(root)
+    if not p.is_relative_to(selected):
+        raise ValueError('external OLID image is outside OLID_DATA_ROOT')
+    checked = _olid_file(selected, p.relative_to(selected).as_posix())
+    return str(checked)
+
+
 def olid_rows(manifest, root):
+    selected = olid_data_root(root)
     rows, seen = [], set()
     for r in read_csv(manifest):
-        p = local_file(root, r.get('path', ''))
+        p = _olid_file(selected, r.get('path', ''))
         key = str(p).casefold()
         if key in seen:
             raise ValueError('duplicate manifest image')

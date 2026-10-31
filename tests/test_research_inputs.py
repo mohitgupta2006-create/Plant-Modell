@@ -1,9 +1,11 @@
 """Synthetic fixtures test contracts only; these are not research images or experiment results."""
 import csv
 import hashlib
+import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -15,6 +17,8 @@ from reconcile import reconcile
 
 class Inputs(unittest.TestCase):
     def setUp(self):
+        env=patch.dict(os.environ);env.start();self.addCleanup(env.stop)
+        os.environ.pop("OLID_DATA_ROOT", None)  # fixtures must not access a user dataset
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name)
         self.image=self.root/'leaf.png'; Image.new('RGB',(40,40),'green').save(self.image)
         self.row=dict(path='leaf.png',condition='Tomato___N_Deficiency',source='OLID_I',acquisition='field',
